@@ -18,6 +18,7 @@ bool send(QByteArray msg, QHostAddress *serverIP, QHostAddress clientIP, quint16
         qDebug()<<("Msg send failure");
         return false;
     }
+    qDebug() << "Sent to" << clientIP << clientPort;
     return true;
 }
 
@@ -38,7 +39,7 @@ quint16 findWordPos(QByteArray qba, QByteArray word, quint16 begin, quint16 end)
 
 Task_makeToken::Task_makeToken(QHostAddress *serverIP_inp, QByteArray msg_inp,
                                QHostAddress clientIP_inp, quint16 clientPort_inp,
-                               std::shared_ptr<QHash<QByteArray, uint>> pCredentialsMap_inp,
+                               std::shared_ptr<QMap<QByteArray, uint>> pCredentialsMap_inp,
                                QReadWriteLock *pCredentialsMapLock_inp)
     : serverIP(serverIP_inp), msg(msg_inp), clientIP(clientIP_inp), clientPort(clientPort_inp),
       pCredentialsMap(pCredentialsMap_inp), pCredentialsMapLock(pCredentialsMapLock_inp)
@@ -48,14 +49,16 @@ Task_makeToken::Task_makeToken(QHostAddress *serverIP_inp, QByteArray msg_inp,
 
 void Task_makeToken::run()
 {
-    qDebug() << "MAKE TOKEN";
-    if ( ( !msg.isEmpty()) || (msg.size() <= maxLoginSize) )
+    qDebug() << "MAKE TOKEN size ="<<msg.size();
+    if ( ( !msg.isEmpty()) && (msg.size() <= authWordLength + maxLoginSize) && (msg.size() > authWordLength) )
     {
-        if (msg.left(loginWordLength) == loginWord.toUtf8())
+        if (msg.left(authWordLength) == authWord.toUtf8())
         {
-            auto login = msg.mid(loginWordLength, msg.size() - loginWordLength);
+            auto login = msg.mid(authWordLength, msg.size() - authWordLength);
+            pCredentialsMapLock->lockForRead();
             if ( !pCredentialsMap->contains(login))
             {
+                pCredentialsMapLock->unlock();
                 auto token = qHash(login, QDateTime::currentDateTime().toTime_t());
 
                 pCredentialsMapLock->lockForWrite();
@@ -73,6 +76,7 @@ void Task_makeToken::run()
             }
             else
             {
+                pCredentialsMapLock->unlock();
                 /*Login already exists*/
             }
         }
@@ -91,13 +95,14 @@ void Task_makeToken::run()
 
 Task_recordMsg::Task_recordMsg(QHostAddress *serverIP_inp, QByteArray msg_inp,
                                QHostAddress clientIP_inp, quint16 clientPort_inp,
-                               std::shared_ptr<QHash<QByteArray, uint>> pCredentialsMap_inp,
+                               std::shared_ptr<QMap<QByteArray, uint>> pCredentialsMap_inp,
                                QReadWriteLock *pCredentialsMapLock_inp,
                                std::shared_ptr<std::queue<QString>> pLogQueue_inp,
-                               QReadWriteLock *pLogQueueLock_inp)
+                               QReadWriteLock *pLogQueueLock_inp,
+                               std::condition_variable *pLogQueueChanged_inp)
     : serverIP(serverIP_inp), msg(msg_inp), clientIP(clientIP_inp), clientPort(clientPort_inp),
       pCredentialsMap(pCredentialsMap_inp), pCredentialsMapLock(pCredentialsMapLock_inp),
-      pLogQueue(pLogQueue_inp), pLogQueueLock(pLogQueueLock_inp)
+      pLogQueue(pLogQueue_inp), pLogQueueLock(pLogQueueLock_inp), pLogQueueChanged(pLogQueueChanged_inp)
 {
     /*NOTHING TO DO*/
 }
@@ -138,7 +143,8 @@ void Task_recordMsg::run()
                         pLogQueueLock->lockForWrite();
                         pLogQueue->push(QString::fromUtf8(toRecord));
                         pLogQueueLock->unlock();
-                        //NOTIFY CV
+
+                        pLogQueueChanged->notify_one();
                     }
                     else
                     {

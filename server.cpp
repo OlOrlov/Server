@@ -3,7 +3,7 @@
 Server::Server(QString ip)
 {
     server_ip.setAddress(ip);
-    pCredentialsMap = std::make_shared<QHash<QByteArray, uint>>(credentialsMap);
+    pCredentialsMap = std::make_shared<QMap<QByteArray, uint>>(credentialsMap);
     pLogQueue = std::make_shared<std::queue<QString>>(logQueue);
 }
 
@@ -18,7 +18,7 @@ void Server::start()
     if (setupSuccess)
     {
         printf("Initiation successful\n");
-        Logger logger(pLogQueue, &logQueueLock);
+        Logger logger(pLogQueue, &logQueueLock, &logQueueMtx, &logQueueChanged);
         logger.start();
 
         while (true)
@@ -45,7 +45,7 @@ void Server::start()
                 qDebug() << "8001 RCV from" << client_ip << client_port;//TO_DELETE
                 threadPool.start(new Task_recordMsg(&server_ip, received, client_ip, client_port,
                                                     pCredentialsMap, &credentialsMapLock,
-                                                    pLogQueue, &logQueueLock));
+                                                    pLogQueue, &logQueueLock, &logQueueChanged));
             }
         }
     }

@@ -1,6 +1,7 @@
 QT += core
 QT -= gui
 QT += network
+QT += widgets
 
 CONFIG += c++11
 
@@ -12,13 +13,11 @@ TEMPLATE = app
 
 SOURCES += main.cpp \
     server.cpp \
-    worker.cpp \
     tasks.cpp \
     logger.cpp
 
 HEADERS += \
     server.h \
-    worker.h \
     hcommon.h \
     tasks.h \
     logger.h

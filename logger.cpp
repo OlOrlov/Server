@@ -1,23 +1,49 @@
 #include "logger.h"
 
 Logger::Logger(std::shared_ptr<std::queue<QString>> pLogQueue_inp,
-               QReadWriteLock *pLogQueueLock_inp)
+               QReadWriteLock *pLogQueueLock_inp,
+               std::mutex *logQueueMtx_inp,
+               std::condition_variable *pLogQueueChanged_inp)
 {
+    auto fileName = QApplication::applicationDirPath() + "/Log.txt";
+    logFile.setFileName(fileName);
+    logFile.resize(0);
+
     pLogQueue = pLogQueue_inp;
     pLogQueueLock = pLogQueueLock_inp;
+    logQueueMtx = logQueueMtx_inp;
+    pLogQueueChanged = pLogQueueChanged_inp;
+}
+
+Logger::~Logger()
+{
+    if (logFile.isOpen())
+        logFile.close();
 }
 
 void Logger::run()
 {
     while (true)
     {
-        pLogQueueLock->lockForRead();
-        if ( !pLogQueue->empty())
+        std::unique_lock<std::mutex> lk(*logQueueMtx);
+        pLogQueueChanged->wait(lk);
+
+        assert(logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text) == true);
+
+        pLogQueueLock->lockForWrite();
+        while ( !pLogQueue->empty())
         {
-            qDebug() << "TORECORD";
-            qDebug() << pLogQueue->front();
+            auto toRecord = pLogQueue->front();
+            pLogQueue->pop();
+            pLogQueueLock->unlock();
+
+            logFile.write((QTime::currentTime().toString("hh.mm.ss") + " " + toRecord + "\r").toUtf8());
+            qDebug() << "TO RECORD:" << toRecord;
+
+            pLogQueueLock->lockForWrite();
         }
-        QThread::msleep(5);
         pLogQueueLock->unlock();
+        logFile.close();
+        lk.unlock();
     }
 }

@@ -7,6 +7,7 @@
 #include "hcommon.h"
 #include "logger.h"
 #include <mutex>// TO_DELETE?
+#include <condition_variable>
 #include <queue>
 #include <QThreadPool>
 #include <memory>
@@ -25,13 +26,15 @@ private:
     QHostAddress server_ip;
     QThreadPool threadPool;
 
-    QHash<QByteArray, uint> credentialsMap;
-    std::shared_ptr<QHash<QByteArray, uint>> pCredentialsMap;
+    QMap<QByteArray, uint> credentialsMap;
+    std::shared_ptr<QMap<QByteArray, uint>> pCredentialsMap;
     QReadWriteLock credentialsMapLock;
 
     std::queue<QString> logQueue;
     std::shared_ptr<std::queue<QString>> pLogQueue;
     QReadWriteLock logQueueLock;
+    std::condition_variable logQueueChanged;
+    std::mutex logQueueMtx;
 };
 
 #endif // SERVER_H
