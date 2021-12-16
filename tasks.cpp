@@ -1,10 +1,9 @@
 #include "tasks.h"
-
+#include <QThread>
 bool send(QByteArray msg, QHostAddress *serverIP, QHostAddress clientIP, quint16 clientPort)
 {
     QUdpSocket xmt_sock;
     xmt_sock.bind(*serverIP, portForSending, QUdpSocket::ShareAddress);
-    qDebug() << "Send to" << clientIP.toString() << clientPort;
     xmt_sock.connectToHost(clientIP, clientPort);
     if ( !xmt_sock.waitForConnected(1))
     {
@@ -18,7 +17,6 @@ bool send(QByteArray msg, QHostAddress *serverIP, QHostAddress clientIP, quint16
         qDebug()<<("Msg send failure");
         return false;
     }
-    qDebug() << "Sent to" << clientIP << clientPort;
     return true;
 }
 
@@ -49,7 +47,6 @@ Task_makeToken::Task_makeToken(QHostAddress *serverIP_inp, QByteArray msg_inp,
 
 void Task_makeToken::run()
 {
-    qDebug() << "MAKE TOKEN size ="<<msg.size();
     if ( ( !msg.isEmpty()) && (msg.size() <= authWordLength + maxLoginSize) && (msg.size() > authWordLength) )
     {
         if (msg.left(authWordLength) == authWord.toUtf8())
@@ -65,13 +62,10 @@ void Task_makeToken::run()
                 pCredentialsMap->insert(login, token);
                 pCredentialsMapLock->unlock();
 
-                //auto toSend(QByteArray::number(token));
-
                 QByteArray toSend;
                 for (int i = tokenSize - 1; i >= 0; --i)
                     toSend.append((token & (0xFF << i*8)) >> i*8);
 
-                qDebug() << "MADE TOKEN" << token << toSend.toHex();
                 send(toSend, serverIP, clientIP, clientPort);
             }
             else
@@ -121,12 +115,10 @@ void Task_recordMsg::run()
             {
                 auto login = msg.mid(loginWordLength, tokenPos - loginWordLength);
                 auto token_qba = msg.mid(tokenPos + tokenWordLength, tokenSize);
-                qDebug() << "RECEIVED TOKEN TO CONVERT" << token_qba.toHex().toUpper();
+
                 uint token = 0;
                 for (int i = tokenSize - 1; i >= 0; --i)
                     token |= (quint8)token_qba[i] << (3-i)*8;
-
-                qDebug() << "Login:" << login.toHex();
 
                 pCredentialsMapLock->lockForRead();
                 auto tokenIter = pCredentialsMap->find(login);
@@ -138,8 +130,6 @@ void Task_recordMsg::run()
                     {
                         auto toRecord = msg.mid(tokenPos + tokenWordLength +
                                                 tokenSize + msgWordLength);
-
-                        qDebug() << "WRITING";
                         pLogQueueLock->lockForWrite();
                         pLogQueue->push(QString::fromUtf8(toRecord));
                         pLogQueueLock->unlock();

@@ -30,7 +30,6 @@ void Server::start()
                 QHostAddress client_ip;
                 quint16 client_port = 0;
                 auth_rcv_sock.readDatagram(received.data(), received.size(), &client_ip, &client_port);
-                qDebug() << "8000 RCV from" << client_ip << client_port;//TO_DELETE
                 threadPool.start(new Task_makeToken(&server_ip, received, client_ip, client_port,
                                                     pCredentialsMap, &credentialsMapLock));
             }
@@ -42,7 +41,11 @@ void Server::start()
                 QHostAddress client_ip;
                 quint16 client_port = 0;
                 logRecord_rcv_sock.readDatagram(received.data(), received.size(), &client_ip, &client_port);
-                qDebug() << "8001 RCV from" << client_ip << client_port;//TO_DELETE
+
+
+                //auto toRecord = received.mid(12);
+                //qDebug() << "To record:" << QString::fromUtf8(toRecord);
+
                 threadPool.start(new Task_recordMsg(&server_ip, received, client_ip, client_port,
                                                     pCredentialsMap, &credentialsMapLock,
                                                     pLogQueue, &logQueueLock, &logQueueChanged));
