@@ -37,7 +37,6 @@ void Logger::run()
             pLogQueue->pop();
             pLogQueueLock->unlock();
 
-            //qDebug() << QTime::currentTime().toString("hh.mm.ss.zzz") + " " + toRecord;
             logFile.write((QTime::currentTime().toString("hh.mm.ss.zzz") + " " + toRecord + "\n").toUtf8());
 
             pLogQueueLock->lockForWrite();
