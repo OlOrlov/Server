@@ -5,18 +5,16 @@
 #include <QUdpSocket>
 #include <QTime>
 #include <QReadWriteLock>
-#include <queue>
-#include <memory>
-#include <condition_variable>
-
+#include <QFile>
+#include <mutex>
 #include "hcommon.h"
 
-class Task_makeToken : public QRunnable
+class Task_authorization : public QRunnable
 {
 public:
-    Task_makeToken(QHostAddress *serverIP_inp, QByteArray msg_inp,
+    Task_authorization(QHostAddress *serverIP_inp, QByteArray msg_inp,
                    QHostAddress clientIP_inp, quint16 clientPort_inp,
-                   std::shared_ptr<QMap<QByteArray, uint>> pCredentialsMap_inp,
+                   QMap<QByteArray, uint> *pCredentialsMap_inp,
                    QReadWriteLock *pCredentialsMapLock_inp);
 
     void run() override;
@@ -26,7 +24,7 @@ private:
     QByteArray msg;
     QHostAddress clientIP;
     quint16 clientPort;
-    std::shared_ptr<QMap<QByteArray, uint>> pCredentialsMap;
+    QMap<QByteArray, uint> *pCredentialsMap;
     QReadWriteLock *pCredentialsMapLock;
 };
 
@@ -37,11 +35,10 @@ class Task_recordMsg : public QRunnable
 public:
     Task_recordMsg(QHostAddress *serverIP_inp, QByteArray msg_inp,
                    QHostAddress clientIP_inp, quint16 clientPort_inp,
-                   std::shared_ptr<QMap<QByteArray, uint>> pCredentialsMap_inp,
+                   QMap<QByteArray, uint> *pCredentialsMap_inp,
                    QReadWriteLock *pCredentialsMapLock_inp,
-                   std::shared_ptr<std::queue<QString>> pLogQueue_inp,
-                   QReadWriteLock *pLogQueueLock_inp,
-                   std::condition_variable *pLogQueueChanged_inp);
+                   QFile *pLogFile_inp,
+                   std::mutex *pLogFileLock_inp);
 
     void run() override;
 
@@ -50,11 +47,12 @@ private:
     QByteArray msg;
     QHostAddress clientIP;
     quint16 clientPort;
-    std::shared_ptr<QMap<QByteArray, uint>> pCredentialsMap;
+    QMap<QByteArray, uint> *pCredentialsMap;
     QReadWriteLock *pCredentialsMapLock;
-    std::shared_ptr<std::queue<QString>> pLogQueue;
-    QReadWriteLock *pLogQueueLock;
-    std::condition_variable *pLogQueueChanged;
+    QFile *pLogFile;
+    std::mutex *pLogFileLock;
+
+    void writeToLog(QByteArray toWrite);
 };
 
 #endif // TASKS_H

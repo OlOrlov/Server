@@ -13,11 +13,9 @@ TEMPLATE = app
 
 SOURCES += main.cpp \
     server.cpp \
-    tasks.cpp \
-    logger.cpp
+    tasks.cpp
 
 HEADERS += \
     server.h \
     hcommon.h \
-    tasks.h \
-    logger.h
+    tasks.h

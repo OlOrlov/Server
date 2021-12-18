@@ -4,14 +4,14 @@
 #include <QObject>
 #include <QUdpSocket>
 #include <QThread>// TO_DELETE?
-#include "hcommon.h"
-#include "logger.h"
-#include <mutex>// TO_DELETE?
-#include <condition_variable>
-#include <queue>
+#include <mutex>
 #include <QThreadPool>
-#include <memory>
 #include <QReadWriteLock>
+#include <QApplication>
+#include <QFile>
+
+#include "hcommon.h"
+#include "tasks.h"
 
 class Server : public QObject
 {
@@ -22,19 +22,14 @@ public:
     void start();
 
 private:
-
     QHostAddress server_ip;
     QThreadPool threadPool;
 
     QMap<QByteArray, uint> credentialsMap;
-    std::shared_ptr<QMap<QByteArray, uint>> pCredentialsMap;
     QReadWriteLock credentialsMapLock;
 
-    std::queue<QString> logQueue;
-    std::shared_ptr<std::queue<QString>> pLogQueue;
-    QReadWriteLock logQueueLock;
-    std::condition_variable logQueueChanged;
-    std::mutex logQueueMtx;
+    QFile logFile;
+    std::mutex logFileLock;
 };
 
 #endif // SERVER_H

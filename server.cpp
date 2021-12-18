@@ -3,8 +3,10 @@
 Server::Server(QString ip)
 {
     server_ip.setAddress(ip);
-    pCredentialsMap = std::make_shared<QMap<QByteArray, uint>>(credentialsMap);
-    pLogQueue = std::make_shared<std::queue<QString>>(logQueue);
+
+    auto fileName = QApplication::applicationDirPath() + "/Log.txt";
+    logFile.setFileName(fileName);
+    logFile.resize(0);
 }
 
 void Server::start()
@@ -12,14 +14,13 @@ void Server::start()
     QUdpSocket auth_rcv_sock;
     QUdpSocket logRecord_rcv_sock;
     qDebug() << server_ip.toString() << portForAuthorization << portForLogRecord;
-    bool setupSuccess = auth_rcv_sock.bind(server_ip, portForAuthorization, QUdpSocket::DontShareAddress) &&
-         logRecord_rcv_sock.bind(server_ip, portForLogRecord, QUdpSocket::DontShareAddress);
+
+    bool setupSuccess = auth_rcv_sock.bind(server_ip, portForAuthorization, QUdpSocket::DontShareAddress);
+    setupSuccess &= logRecord_rcv_sock.bind(server_ip, portForLogRecord, QUdpSocket::DontShareAddress);
 
     if (setupSuccess)
     {
         printf("Initiation successful\n");
-        Logger logger(pLogQueue, &logQueueLock, &logQueueMtx, &logQueueChanged);
-        logger.start();
 
         while (true)
         {
@@ -30,8 +31,10 @@ void Server::start()
                 QHostAddress client_ip;
                 quint16 client_port = 0;
                 auth_rcv_sock.readDatagram(received.data(), received.size(), &client_ip, &client_port);
-                threadPool.start(new Task_makeToken(&server_ip, received, client_ip, client_port,
-                                                    pCredentialsMap, &credentialsMapLock));
+                threadPool.start(new Task_authorization(&server_ip, received,
+                                                    client_ip, client_port,
+                                                    &credentialsMap,
+                                                    &credentialsMapLock));
             }
 
             if (logRecord_rcv_sock.hasPendingDatagrams())
@@ -41,14 +44,12 @@ void Server::start()
                 QHostAddress client_ip;
                 quint16 client_port = 0;
                 logRecord_rcv_sock.readDatagram(received.data(), received.size(), &client_ip, &client_port);
-
-
-                //auto toRecord = received.mid(12);
-                //qDebug() << "To record:" << QString::fromUtf8(toRecord);
-
-                threadPool.start(new Task_recordMsg(&server_ip, received, client_ip, client_port,
-                                                    pCredentialsMap, &credentialsMapLock,
-                                                    pLogQueue, &logQueueLock, &logQueueChanged));
+                threadPool.start(new Task_recordMsg(&server_ip, received,
+                                                    client_ip, client_port,
+                                                    &credentialsMap,
+                                                    &credentialsMapLock,
+                                                    &logFile,
+                                                    &logFileLock));
             }
         }
     }
