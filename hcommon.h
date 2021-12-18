@@ -1,7 +1,7 @@
 #ifndef HCOMMON_H
 #define HCOMMON_H
 
-const quint16 maxConnects = 1000;
+const quint8 maxConnects = 1000;
 const quint8 maxMessageSize = 16;//TO_DELETE?
 const quint16 portForAuthorization = 8000;
 const quint16 portForLogRecord = 8001;

@@ -18,6 +18,12 @@ void Server::start()
     bool setupSuccess = auth_rcv_sock.bind(server_ip, portForAuthorization, QUdpSocket::DontShareAddress);
     setupSuccess &= logRecord_rcv_sock.bind(server_ip, portForLogRecord, QUdpSocket::DontShareAddress);
 
+    int threadNumAllowedToWrite = 0;
+    std::mutex threadNumAllowedToWriteLock;
+    quint8 currThreadNum = 0;
+    std::condition_variable writeAllowed;
+    std::mutex writeAllowedLock;
+
     if (setupSuccess)
     {
         printf("Initiation successful\n");
@@ -31,7 +37,7 @@ void Server::start()
                 QHostAddress client_ip;
                 quint16 client_port = 0;
                 auth_rcv_sock.readDatagram(received.data(), received.size(), &client_ip, &client_port);
-                threadPool.start(new Task_authorization(&server_ip, received,
+                threadPool.start(new Task_makeToken(&server_ip, received,
                                                     client_ip, client_port,
                                                     &credentialsMap,
                                                     &credentialsMapLock));
@@ -44,12 +50,20 @@ void Server::start()
                 QHostAddress client_ip;
                 quint16 client_port = 0;
                 logRecord_rcv_sock.readDatagram(received.data(), received.size(), &client_ip, &client_port);
+
                 threadPool.start(new Task_recordMsg(&server_ip, received,
                                                     client_ip, client_port,
                                                     &credentialsMap,
                                                     &credentialsMapLock,
                                                     &logFile,
-                                                    &logFileLock));
+                                                    &writeAllowedLock,
+                                                    &writeAllowed,
+                                                    &threadNumAllowedToWrite,
+                                                    &threadNumAllowedToWriteLock,
+                                                    currThreadNum));
+                currThreadNum++;
+                if (currThreadNum == 4)
+                    currThreadNum = 0;
             }
         }
     }

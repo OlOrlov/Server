@@ -9,6 +9,7 @@
 #include <QReadWriteLock>
 #include <QApplication>
 #include <QFile>
+#include <condition_variable>
 
 #include "hcommon.h"
 #include "tasks.h"
@@ -29,7 +30,6 @@ private:
     QReadWriteLock credentialsMapLock;
 
     QFile logFile;
-    std::mutex logFileLock;
 };
 
 #endif // SERVER_H

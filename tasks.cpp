@@ -30,7 +30,7 @@ quint16 findWordPos(QByteArray qba, QByteArray word, quint16 begin, quint16 end)
     return 0;
 }
 
-Task_authorization::Task_authorization(QHostAddress *serverIP_inp, QByteArray msg_inp,
+Task_makeToken::Task_makeToken(QHostAddress *serverIP_inp, QByteArray msg_inp,
                                QHostAddress clientIP_inp, quint16 clientPort_inp,
                                QMap<QByteArray, uint> *pCredentialsMap_inp,
                                QReadWriteLock *pCredentialsMapLock_inp)
@@ -40,7 +40,7 @@ Task_authorization::Task_authorization(QHostAddress *serverIP_inp, QByteArray ms
     /*NOTHING TO DO*/
 }
 
-void Task_authorization::run()
+void Task_makeToken::run()
 {
     if ( ( !msg.isEmpty()) && (msg.size() <= authWordLength + maxLoginSize) && (msg.size() > authWordLength) )
     {
@@ -94,10 +94,18 @@ Task_recordMsg::Task_recordMsg(QHostAddress *serverIP_inp, QByteArray msg_inp,
                                QMap<QByteArray, uint> *pCredentialsMap_inp,
                                QReadWriteLock *pCredentialsMapLock_inp,
                                QFile *pLogFile_inp,
-                               std::mutex *pLogFileLock_inp)
+                               std::mutex *pWriteAllowedLock_inp,
+                               std::condition_variable *pThreadAllowedToWrite_inp,
+                               int* pNumWriteAllowed_inp,
+                               std::mutex *pNumWriteAllowedLock_inp,
+                               int currThreadNum_inp)
     : serverIP(serverIP_inp), msg(msg_inp), clientIP(clientIP_inp), clientPort(clientPort_inp),
       pCredentialsMap(pCredentialsMap_inp), pCredentialsMapLock(pCredentialsMapLock_inp),
-      pLogFile(pLogFile_inp), pLogFileLock(pLogFileLock_inp)
+      pLogFile(pLogFile_inp), pWriteAllowedLock(pWriteAllowedLock_inp),
+      pThreadAllowedToWrite(pThreadAllowedToWrite_inp),
+      pNumWriteAllowed(pNumWriteAllowed_inp),
+      pNumWriteAllowedLock(pNumWriteAllowedLock_inp),
+      currThreadNum(currThreadNum_inp)
 {
     /*NOTHING TO DO*/
 }
@@ -132,7 +140,29 @@ void Task_recordMsg::run()
                         auto toRecord = msg.mid(tokenPos + tokenWordLength +
                                                 tokenSize + msgWordLength);
 
+
+                        while (true)
+                        {
+                            pNumWriteAllowedLock->lock();
+                            if (*pNumWriteAllowed == currThreadNum)
+                            {
+                                break;
+                            }
+                            pNumWriteAllowedLock->unlock();
+
+                            std::unique_lock<std::mutex> lk(*pWriteAllowedLock);
+                            pThreadAllowedToWrite->wait(lk);
+                        }
                         writeToLog(toRecord);
+
+                        (*pNumWriteAllowed)++;
+                        if (*pNumWriteAllowed == 4)
+                            *pNumWriteAllowed = 0;
+                        //printf("\n%d - Made record. new active thread is: %d", currThreadNum, *pNumWriteAllowed);
+                        pNumWriteAllowedLock->unlock();
+                        pThreadAllowedToWrite->notify_all();
+
+                        return;
                     }
                     else
                     {
@@ -160,13 +190,12 @@ void Task_recordMsg::run()
     {
         /*Wrong message size*/
     }
+    exitWithoutWriting();
 }
 
 
 void Task_recordMsg::writeToLog(QByteArray toWrite)
 {
-    pLogFileLock->lock();
-
     if ( !pLogFile->open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text))
     {
         /*Failed to open logFile*/
@@ -178,5 +207,31 @@ void Task_recordMsg::writeToLog(QByteArray toWrite)
     pLogFile->write(toWrite);
 
     pLogFile->close();
-    pLogFileLock->unlock();
+}
+
+void Task_recordMsg::exitWithoutWriting()
+{
+//    printf("%d - exit without writing", currThreadNum);
+    while (true)
+    {
+        pNumWriteAllowedLock->lock();
+        if (*pNumWriteAllowed == currThreadNum)
+        {
+            //printf("\n%d - allowed to increment", currThreadNum);
+            break;
+        }
+
+        pNumWriteAllowedLock->unlock();
+
+        std::unique_lock<std::mutex> lk(*pWriteAllowedLock);
+        pThreadAllowedToWrite->wait(lk);
+    }
+    (*pNumWriteAllowed)++;
+    if (*pNumWriteAllowed == 4)
+        *pNumWriteAllowed = 0;
+
+    //printf("\n%d - No record made. new active thread is: %d", currThreadNum, *pNumWriteAllowed);
+
+    pNumWriteAllowedLock->unlock();
+    pThreadAllowedToWrite->notify_all();
 }
