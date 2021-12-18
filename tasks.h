@@ -14,8 +14,10 @@
 class Task_makeToken : public QRunnable
 {
 public:
-    Task_makeToken(QHostAddress *serverIP_inp, QByteArray msg_inp,
-                   QHostAddress clientIP_inp, quint16 clientPort_inp,
+    Task_makeToken(QHostAddress *serverIP_inp,
+                   QByteArray msg_inp,
+                   QHostAddress clientIP_inp,
+                   quint16 clientPort_inp,
                    QMap<QByteArray, uint> *pCredentialsMap_inp,
                    QReadWriteLock *pCredentialsMapLock_inp);
 
@@ -32,11 +34,13 @@ private:
 
 
 
-class Task_recordMsg : public QRunnable
+class Task_logMsg : public QRunnable
 {
 public:
-    Task_recordMsg(QHostAddress *serverIP_inp, QByteArray msg_inp,
-                   QHostAddress clientIP_inp, quint16 clientPort_inp,
+    Task_logMsg(QHostAddress *serverIP_inp,
+                   QByteArray msg_inp,
+                   QHostAddress clientIP_inp,
+                   quint16 clientPort_inp,
                    QMap<QByteArray, uint> *pCredentialsMap_inp,
                    QReadWriteLock *pCredentialsMapLock_inp,
                    QFile *pLogFile_inp,
@@ -63,7 +67,7 @@ private:
     int currThreadNum;
 
     void writeToLog(QByteArray toWrite);
-    void exitWithoutWriting();
+    void exitWithoutLogging();
 };
 
 #endif // TASKS_H

@@ -15,23 +15,23 @@ void send(QByteArray msg, QHostAddress *serverIP, QHostAddress clientIP, quint16
     xmt_sock.write(msg);
 }
 
-quint16 findWordPos(QByteArray qba, QByteArray word, quint16 begin, quint16 end)
+quint16 findWordPos(QByteArray arrayForSearching, QByteArray searchWord, quint16 begin, quint16 end)
 {
-    quint8 wordLength = word.length();
+    quint8 wordLength = searchWord.length();
     quint16 pos = begin;
     while (pos < end)
     {
-        if (qba.mid(pos, wordLength) == word)
-        {
+        if (arrayForSearching.mid(pos, wordLength) == searchWord)
             return pos;
-        }
         pos++;
     }
     return 0;
 }
 
-Task_makeToken::Task_makeToken(QHostAddress *serverIP_inp, QByteArray msg_inp,
-                               QHostAddress clientIP_inp, quint16 clientPort_inp,
+Task_makeToken::Task_makeToken(QHostAddress *serverIP_inp,
+                               QByteArray msg_inp,
+                               QHostAddress clientIP_inp,
+                               quint16 clientPort_inp,
                                QMap<QByteArray, uint> *pCredentialsMap_inp,
                                QReadWriteLock *pCredentialsMapLock_inp)
     : serverIP(serverIP_inp), msg(msg_inp), clientIP(clientIP_inp), clientPort(clientPort_inp),
@@ -42,7 +42,9 @@ Task_makeToken::Task_makeToken(QHostAddress *serverIP_inp, QByteArray msg_inp,
 
 void Task_makeToken::run()
 {
-    if ( ( !msg.isEmpty()) && (msg.size() <= authWordLength + maxLoginSize) && (msg.size() > authWordLength) )
+    if ( (!msg.isEmpty()) &&
+         (msg.size() > authWordLength) &&
+         (msg.size() < authWordLength + maxLoginSize) )
     {
         if (msg.left(authWordLength) == authWord.toUtf8())
         {
@@ -73,6 +75,7 @@ void Task_makeToken::run()
             }
             else
             {
+                pCredentialsMapLock->unlock();
                 /*Amount of connects exceeds maximum*/
             }
         }
@@ -89,8 +92,10 @@ void Task_makeToken::run()
 
 
 
-Task_recordMsg::Task_recordMsg(QHostAddress *serverIP_inp, QByteArray msg_inp,
-                               QHostAddress clientIP_inp, quint16 clientPort_inp,
+Task_logMsg::Task_logMsg(QHostAddress *serverIP_inp,
+                               QByteArray msg_inp,
+                               QHostAddress clientIP_inp,
+                               quint16 clientPort_inp,
                                QMap<QByteArray, uint> *pCredentialsMap_inp,
                                QReadWriteLock *pCredentialsMapLock_inp,
                                QFile *pLogFile_inp,
@@ -110,9 +115,10 @@ Task_recordMsg::Task_recordMsg(QHostAddress *serverIP_inp, QByteArray msg_inp,
     /*NOTHING TO DO*/
 }
 
-void Task_recordMsg::run()
+void Task_logMsg::run()
 {
-    if ( ( !msg.isEmpty()) || (msg.size() <= maxLoginSize) )
+    if ( ( !msg.isEmpty()) &&
+         (msg.size() <= maxMessageSize) )
     {
         if (msg.left(loginWordLength) == loginWord.toUtf8())
         {
@@ -158,7 +164,7 @@ void Task_recordMsg::run()
                         (*pNumWriteAllowed)++;
                         if (*pNumWriteAllowed == 4)
                             *pNumWriteAllowed = 0;
-                        //printf("\n%d - Made record. new active thread is: %d", currThreadNum, *pNumWriteAllowed);
+
                         pNumWriteAllowedLock->unlock();
                         pThreadAllowedToWrite->notify_all();
 
@@ -190,11 +196,11 @@ void Task_recordMsg::run()
     {
         /*Wrong message size*/
     }
-    exitWithoutWriting();
+    exitWithoutLogging();
 }
 
 
-void Task_recordMsg::writeToLog(QByteArray toWrite)
+void Task_logMsg::writeToLog(QByteArray toWrite)
 {
     if ( !pLogFile->open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text))
     {
@@ -209,17 +215,13 @@ void Task_recordMsg::writeToLog(QByteArray toWrite)
     pLogFile->close();
 }
 
-void Task_recordMsg::exitWithoutWriting()
+void Task_logMsg::exitWithoutLogging()
 {
-//    printf("%d - exit without writing", currThreadNum);
     while (true)
     {
         pNumWriteAllowedLock->lock();
         if (*pNumWriteAllowed == currThreadNum)
-        {
-            //printf("\n%d - allowed to increment", currThreadNum);
             break;
-        }
 
         pNumWriteAllowedLock->unlock();
 
@@ -229,8 +231,6 @@ void Task_recordMsg::exitWithoutWriting()
     (*pNumWriteAllowed)++;
     if (*pNumWriteAllowed == 4)
         *pNumWriteAllowed = 0;
-
-    //printf("\n%d - No record made. new active thread is: %d", currThreadNum, *pNumWriteAllowed);
 
     pNumWriteAllowedLock->unlock();
     pThreadAllowedToWrite->notify_all();
