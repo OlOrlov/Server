@@ -11,7 +11,11 @@ void Server::start()
 {
     QUdpSocket auth_rcv_sock;
     QUdpSocket logRecord_rcv_sock;
-    qDebug() << server_ip.toString() << portForAuthorization << portForLogRecord;
+
+    qDebug() << "\nServer created on IP" << server_ip.toString() <<
+                "\nPort for authorization:" << portForAuthorization <<
+                "\nPort for writing to log:" << portForLogRecord;
+
     bool setupSuccess = auth_rcv_sock.bind(server_ip, portForAuthorization, QUdpSocket::DontShareAddress) &&
          logRecord_rcv_sock.bind(server_ip, portForLogRecord, QUdpSocket::DontShareAddress);
 
@@ -21,6 +25,7 @@ void Server::start()
         Logger logger(pLogQueue, &logQueueLock, &logQueueMtx, &logQueueChanged);
         logger.start();
 
+        /* * * LISTENING PORTS * * */
         while (true)
         {
             if (auth_rcv_sock.hasPendingDatagrams())
@@ -30,8 +35,12 @@ void Server::start()
                 QHostAddress client_ip;
                 quint16 client_port = 0;
                 auth_rcv_sock.readDatagram(received.data(), received.size(), &client_ip, &client_port);
-                threadPool.start(new Task_makeToken(&server_ip, received, client_ip, client_port,
-                                                    pCredentialsMap, &credentialsMapLock));
+                threadPool.start(new Task_authorization(&server_ip,
+                                                        received,
+                                                        client_ip,
+                                                        client_port,
+                                                        pCredentialsMap,
+                                                        &credentialsMapLock));
             }
 
             if (logRecord_rcv_sock.hasPendingDatagrams())
@@ -42,13 +51,15 @@ void Server::start()
                 quint16 client_port = 0;
                 logRecord_rcv_sock.readDatagram(received.data(), received.size(), &client_ip, &client_port);
 
-
-                //auto toRecord = received.mid(12);
-                //qDebug() << "To record:" << QString::fromUtf8(toRecord);
-
-                threadPool.start(new Task_recordMsg(&server_ip, received, client_ip, client_port,
-                                                    pCredentialsMap, &credentialsMapLock,
-                                                    pLogQueue, &logQueueLock, &logQueueChanged));
+                threadPool.start(new Task_logMsg(&server_ip,
+                                                 received,
+                                                 client_ip,
+                                                 client_port,
+                                                 pCredentialsMap,
+                                                 &credentialsMapLock,
+                                                 pLogQueue,
+                                                 &logQueueLock,
+                                                 &logQueueChanged));
             }
         }
     }
