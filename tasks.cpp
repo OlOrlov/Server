@@ -15,25 +15,25 @@ void send(QByteArray msg, QHostAddress *serverIP, QHostAddress clientIP, quint16
     xmt_sock.write(msg);
 }
 
-quint16 findWordPos(QByteArray qba, QByteArray word, quint16 begin, quint16 end)
+quint16 findWordPos(QByteArray arrayForSearching, QByteArray searchWord, quint16 begin, quint16 end)
 {
-    quint8 wordLength = word.length();
+    quint8 wordLength = searchWord.length();
     quint16 pos = begin;
     while (pos < end)
     {
-        if (qba.mid(pos, wordLength) == word)
-        {
+        if (arrayForSearching.mid(pos, wordLength) == searchWord)
             return pos;
-        }
         pos++;
     }
     return 0;
 }
 
-Task_authorization::Task_authorization(QHostAddress *serverIP_inp, QByteArray msg_inp,
-                               QHostAddress clientIP_inp, quint16 clientPort_inp,
-                               QMap<QByteArray, uint> *pCredentialsMap_inp,
-                               QReadWriteLock *pCredentialsMapLock_inp)
+Task_authorization::Task_authorization(QHostAddress *serverIP_inp,
+                                       QByteArray msg_inp,
+                                       QHostAddress clientIP_inp,
+                                       quint16 clientPort_inp,
+                                       QMap<QByteArray, uint> *pCredentialsMap_inp,
+                                       QReadWriteLock *pCredentialsMapLock_inp)
     : serverIP(serverIP_inp), msg(msg_inp), clientIP(clientIP_inp), clientPort(clientPort_inp),
       pCredentialsMap(pCredentialsMap_inp), pCredentialsMapLock(pCredentialsMapLock_inp)
 {
@@ -42,11 +42,14 @@ Task_authorization::Task_authorization(QHostAddress *serverIP_inp, QByteArray ms
 
 void Task_authorization::run()
 {
-    if ( ( !msg.isEmpty()) && (msg.size() <= authWordLength + maxLoginSize) && (msg.size() > authWordLength) )
+    if ( (!msg.isEmpty()) &&
+         (msg.size() > authWordLength)  &&
+         (msg.size() < authWordLength + maxLoginSize))
     {
         if (msg.left(authWordLength) == authWord.toUtf8())
         {
             auto login = msg.mid(authWordLength, msg.size() - authWordLength);
+
             pCredentialsMapLock->lockForRead();
             if (pCredentialsMap->size() < maxConnects)
             {
@@ -73,6 +76,7 @@ void Task_authorization::run()
             }
             else
             {
+                pCredentialsMapLock->unlock();
                 /*Amount of connects exceeds maximum*/
             }
         }
@@ -89,12 +93,14 @@ void Task_authorization::run()
 
 
 
-Task_recordMsg::Task_recordMsg(QHostAddress *serverIP_inp, QByteArray msg_inp,
-                               QHostAddress clientIP_inp, quint16 clientPort_inp,
-                               QMap<QByteArray, uint> *pCredentialsMap_inp,
-                               QReadWriteLock *pCredentialsMapLock_inp,
-                               QFile *pLogFile_inp,
-                               std::mutex *pLogFileLock_inp)
+Task_logMsg::Task_logMsg(QHostAddress *serverIP_inp,
+                         QByteArray msg_inp,
+                         QHostAddress clientIP_inp,
+                         quint16 clientPort_inp,
+                         QMap<QByteArray, uint> *pCredentialsMap_inp,
+                         QReadWriteLock *pCredentialsMapLock_inp,
+                         QFile *pLogFile_inp,
+                         std::mutex *pLogFileLock_inp)
     : serverIP(serverIP_inp), msg(msg_inp), clientIP(clientIP_inp), clientPort(clientPort_inp),
       pCredentialsMap(pCredentialsMap_inp), pCredentialsMapLock(pCredentialsMapLock_inp),
       pLogFile(pLogFile_inp), pLogFileLock(pLogFileLock_inp)
@@ -102,9 +108,10 @@ Task_recordMsg::Task_recordMsg(QHostAddress *serverIP_inp, QByteArray msg_inp,
     /*NOTHING TO DO*/
 }
 
-void Task_recordMsg::run()
+void Task_logMsg::run()
 {
-    if ( ( !msg.isEmpty()) || (msg.size() <= maxLoginSize) )
+    if ( (!msg.isEmpty()) &&
+         (msg.size() <= maxMessageSize) )
     {
         if (msg.left(loginWordLength) == loginWord.toUtf8())
         {
@@ -112,7 +119,7 @@ void Task_recordMsg::run()
                                         tokenWord.toUtf8(),
                                         loginWordLength + 1,
                                         loginWordLength + maxLoginSize);
-            if (tokenPos)
+            if (tokenPos != 0)
             {
                 auto login = msg.mid(loginWordLength, tokenPos - loginWordLength);
                 auto token_qba = msg.mid(tokenPos + tokenWordLength, tokenSize);
@@ -136,8 +143,8 @@ void Task_recordMsg::run()
                     }
                     else
                     {
-                        /*Wrong token*/
                         send(errMsg, serverIP, clientIP, clientPort);
+                        /*Wrong token*/
                     }
                 }
                 else
@@ -163,7 +170,7 @@ void Task_recordMsg::run()
 }
 
 
-void Task_recordMsg::writeToLog(QByteArray toWrite)
+void Task_logMsg::writeToLog(QByteArray toWrite)
 {
     pLogFileLock->lock();
 

@@ -3,7 +3,6 @@
 
 #include <QObject>
 #include <QUdpSocket>
-#include <QThread>// TO_DELETE?
 #include <mutex>
 #include <QThreadPool>
 #include <QReadWriteLock>

@@ -12,10 +12,12 @@
 class Task_authorization : public QRunnable
 {
 public:
-    Task_authorization(QHostAddress *serverIP_inp, QByteArray msg_inp,
-                   QHostAddress clientIP_inp, quint16 clientPort_inp,
-                   QMap<QByteArray, uint> *pCredentialsMap_inp,
-                   QReadWriteLock *pCredentialsMapLock_inp);
+    Task_authorization(QHostAddress *serverIP_inp,
+                       QByteArray msg_inp,
+                       QHostAddress clientIP_inp,
+                       quint16 clientPort_inp,
+                       QMap<QByteArray, uint> *pCredentialsMap_inp,
+                       QReadWriteLock *pCredentialsMapLock_inp);
 
     void run() override;
 
@@ -30,15 +32,17 @@ private:
 
 
 
-class Task_recordMsg : public QRunnable
+class Task_logMsg : public QRunnable
 {
 public:
-    Task_recordMsg(QHostAddress *serverIP_inp, QByteArray msg_inp,
-                   QHostAddress clientIP_inp, quint16 clientPort_inp,
-                   QMap<QByteArray, uint> *pCredentialsMap_inp,
-                   QReadWriteLock *pCredentialsMapLock_inp,
-                   QFile *pLogFile_inp,
-                   std::mutex *pLogFileLock_inp);
+    Task_logMsg(QHostAddress *serverIP_inp,
+                QByteArray msg_inp,
+                QHostAddress clientIP_inp,
+                quint16 clientPort_inp,
+                QMap<QByteArray, uint> *pCredentialsMap_inp,
+                QReadWriteLock *pCredentialsMapLock_inp,
+                QFile *pLogFile_inp,
+                std::mutex *pLogFileLock_inp);
 
     void run() override;
 
